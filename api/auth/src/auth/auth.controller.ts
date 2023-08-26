@@ -1,9 +1,11 @@
-import { BadRequestException, Body, Controller, Post } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Post, UseGuards } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { SignInRequestDto } from './dto/signin.request.dto';
 import { SignUpRequestDto } from './dto/signup.request.dto';
 import { ConfirmSignUpRequestDto } from './dto/confirm_signup.request.dto';
+import { ApiKeyAuthGuard } from './guard/apikey-auth.guard';
 
+@UseGuards(ApiKeyAuthGuard)
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}

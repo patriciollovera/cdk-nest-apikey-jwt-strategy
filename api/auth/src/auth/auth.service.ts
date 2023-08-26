@@ -6,15 +6,40 @@ import { CognitoIdentityServiceProvider } from 'aws-sdk';
 import { InitiateAuthRequest } from 'aws-sdk/clients/cognitoidentityserviceprovider';
 import { SignUpRequest } from 'aws-sdk/clients/cognitoidentityserviceprovider';
 import { ConfirmSignUpRequest } from 'aws-sdk/clients/cognitoidentityserviceprovider';
-
+// import { UsersService } from '../users/users.service';
+// import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
 
   const cognito = new CognitoIdentityServiceProvider();
-
-
+  
   @Injectable()
   export class AuthService {
-  
     
+    // constructor(private usersService: UsersService, private jwtService: JwtService, private configService: ConfigService) {}
+    
+    validateApiKey(apiKey: string) {
+        const apiKeys: string[] = ['api-key-1', 'api-key-2'];
+        return apiKeys.find((key) => apiKey == key);
+    }
+
+    // async validateUser(username: string, pass: string): Promise<any> {
+    //     const user = await this.usersService.findOne(username);
+    //     if (user && user.password === pass) {
+    //       const { password, ...result } = user;
+    //       return result;
+    //     }
+    //     return null;
+    //   }
+    
+    // async login(user: any) {
+    //     const payload = { username: user.username, sub: user.userId };
+    //     return {
+    //       access_token: this.jwtService.sign(payload),
+    //     };
+    // }
+
+
+
     async signup(authRegisterRequest: SignUpRequestDto) {
       const { name, email, password } = authRegisterRequest;
 
