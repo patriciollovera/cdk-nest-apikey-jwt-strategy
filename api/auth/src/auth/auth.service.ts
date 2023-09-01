@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, HttpException } from '@nestjs/common';
 import { SignUpRequestDto } from './dto/signup.request.dto';
 import { SignInRequestDto } from './dto/signin.request.dto';
 import { ConfirmSignUpRequestDto } from './dto/confirm_signup.request.dto';
@@ -6,39 +6,57 @@ import { CognitoIdentityServiceProvider } from 'aws-sdk';
 import { InitiateAuthRequest } from 'aws-sdk/clients/cognitoidentityserviceprovider';
 import { SignUpRequest } from 'aws-sdk/clients/cognitoidentityserviceprovider';
 import { ConfirmSignUpRequest } from 'aws-sdk/clients/cognitoidentityserviceprovider';
-// import { UsersService } from '../users/users.service';
-// import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
+import { SSMClient, GetParameterCommand } from "@aws-sdk/client-ssm";
+import { response } from 'express';
+import * as AWS from "@aws-sdk/client-secrets-manager";
 
   const cognito = new CognitoIdentityServiceProvider();
   
   @Injectable()
   export class AuthService {
-    
-    // constructor(private usersService: UsersService, private jwtService: JwtService, private configService: ConfigService) {}
-    
-    validateApiKey(apiKey: string) {
-        const apiKeys: string[] = ['api-key-1', 'api-key-2'];
-        return apiKeys.find((key) => apiKey == key);
+        
+    async validateApiKey(apiKey: string) {
+        
+        let param: any;
+        let secret_object: any;
+
+        // SSM Strategy - Retrieve secret ARN from Prameter Store 
+        // Validate apikey using Parameter Store 
+        const client = new SSMClient();
+        const input = { // GetParameterRequest
+        Name: process.env.SECRET_PARAMETER!, // required
+        WithDecryption: true || false,
+        };
+        try {
+            const command = new GetParameterCommand(input);
+            const response = await client.send(command);
+            param = response.Parameter.Value
+            console.log("REcovered Parameter:");
+            console.log(param);
+        } catch (e) {
+            throw new HttpException(e.text, e.status);
+        }
+
+        // Secret Manager Strategy - Retrieve API KEY from Secret Manager 
+        // Validate apikey using Secret Manager
+        const secretManager = new AWS.SecretsManager({region: 'us-east-1',});  
+        const secret_client = new AWS.SecretsManagerClient();
+        const secret_input = { // GetSecretValueRequest
+          SecretId: process.env.SECRET_ARN! // required
+        };
+        const command = new AWS.GetSecretValueCommand(secret_input);
+        const secret_response = await secret_client.send(command);    
+        secret_object = JSON.parse(secret_response.SecretString);
+
+        // Evaluate apikey comparing to recovered secret.
+        if (Object.values(secret_object)[0] === apiKey){
+            return true;
+        }
+        return false;
+        
+
     }
-
-    // async validateUser(username: string, pass: string): Promise<any> {
-    //     const user = await this.usersService.findOne(username);
-    //     if (user && user.password === pass) {
-    //       const { password, ...result } = user;
-    //       return result;
-    //     }
-    //     return null;
-    //   }
-    
-    // async login(user: any) {
-    //     const payload = { username: user.username, sub: user.userId };
-    //     return {
-    //       access_token: this.jwtService.sign(payload),
-    //     };
-    // }
-
-
 
     async signup(authRegisterRequest: SignUpRequestDto) {
       const { name, email, password } = authRegisterRequest;

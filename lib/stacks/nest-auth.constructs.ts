@@ -6,6 +6,9 @@ import * as gateway from "aws-cdk-lib/aws-apigateway";
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import { UserPool } from 'aws-cdk-lib/aws-cognito';
 import { Cors, EndpointType, IResource, LambdaIntegration, RestApi } from 'aws-cdk-lib/aws-apigateway';
+import * as ssm from "aws-cdk-lib/aws-ssm";
+import * as secretsmanager from "aws-cdk-lib/aws-secretsmanager";
+import { CfnParameter} from 'aws-cdk-lib';
 
 
 export interface AuthApiProps {
@@ -25,7 +28,33 @@ export class nestAuthstack extends Construct {
   
       ({ userPoolId: this.userPoolId, userPoolClientId: this.userPoolClientId } = props);
 
-    // pack all external deps in layer
+    const apiKey = 'API_KEY';
+    const ssmParam = ssm.StringParameter.fromSecureStringParameterAttributes(
+      this,
+      'ssmParameter',
+      {
+        parameterName: apiKey,
+      }
+    );
+    
+    
+    // Create Secret in Secret Manager
+    const secret = new secretsmanager.Secret(this, 'Secret', {
+      generateSecretString: {
+          generateStringKey: 'api_key',
+          secretStringTemplate: JSON.stringify({ username: 'web_user' }),
+          excludeCharacters: ' %+~`#$&*()|[]{}:;<>?!\'/@"\\',
+      },
+    });
+
+    // create an SSM parameters which stores secret ARN
+    new ssm.StringParameter(this, 'apikeyparameter', {
+      parameterName: `API_KEY`,
+      stringValue: secret.secretArn
+    });
+
+
+      // pack all external deps in layer
     const nestAuthLayer = new cdk.aws_lambda.LayerVersion(this, "nestAuthLayer", {
       code: cdk.aws_lambda.Code.fromAsset("api/auth/node_modules"),
       compatibleRuntimes: [
@@ -39,13 +68,22 @@ export class nestAuthstack extends Construct {
       code: lambda.Code.fromAsset("api/auth/dist"),
       handler: "main.api",
       layers: [nestAuthLayer],
+      timeout: cdk.Duration.seconds(10),
       environment: {
         NODE_PATH: "$NODE_PATH:/opt",
 				CLIENT_ID: this.userPoolClientId,
         USERPOOL_ID: this.userPoolId,
+        API_KEY: apiKey,
+        SECRET_ARN: secret.secretArn,
+        SECRET_PARAMETER: apiKey
       },
     });
+
+    // Allow Lambda to read from SSM Parameter Store
+    ssmParam.grantRead(nestAuthLambda);
+
     
+
     const nestapi = new cdk.aws_apigateway.RestApi(this, `nestAuthEndpoint`, {
       restApiName: `nestAuthLambda`,
       defaultMethodOptions: {
@@ -60,8 +98,19 @@ export class nestAuthstack extends Construct {
 
     });
 
+    
+    
+
+    secret.grantRead(nestAuthLambda);
+
+
+    // Asign secret as API Key
     // add api key to enable monitoring
-    const api_Key = nestapi.addApiKey('ApiKey');
+    const api_Key = nestapi.addApiKey('ApiKey', {
+      apiKeyName: `web-app-key`,
+      value: secret.secretValueFromJson('api_key').unsafeUnwrap(),
+    });
+    
     
     const usagePlan = nestapi.addUsagePlan('UsagePlan', {
       description: 'Standard',

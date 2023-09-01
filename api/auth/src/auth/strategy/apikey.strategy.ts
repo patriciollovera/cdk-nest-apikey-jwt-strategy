@@ -9,11 +9,16 @@ export class ApiKeyStrategy extends PassportStrategy(HeaderAPIKeyStrategy, 'x-ap
   constructor(private authService: AuthService, private configService: ConfigService) {
     const headerKeyApiKey = configService.get<string>('HEADER_KEY_API_KEY') || '';
 
-    super({ header: headerKeyApiKey, prefix: '' }, true, async (apiKey, done) => {
-      if (this.authService.validateApiKey(apiKey)) {
-        done(null, true);
-      }
-      done(new UnauthorizedException(), null);
-    });
+    super(
+      { header: headerKeyApiKey, prefix: '' },
+      true, 
+      async (apiKey, done) => {
+
+        if (await this.authService.validateApiKey(apiKey)) {
+          done(null, true);
+        }
+        done(new UnauthorizedException(), null);
+    
+      });
   }
 }
